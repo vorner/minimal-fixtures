@@ -7,7 +7,7 @@ extern crate syn;
 
 use proc_macro::TokenStream;
 use quote::Tokens;
-use syn::{ArgCaptured, FnArg, Ident, Item, ItemFn};
+use syn::{ArgCaptured, FnArg, Ident, Item, ItemFn, Type, TypeReference};
 
 // TODO: Support for the question mark in tests, once it exists
 
@@ -18,8 +18,12 @@ fn wrap_call<'a, I: Iterator<Item = &'a FnArg>>(mut args: I, idx: usize, inner: 
         Some(&FnArg::Captured(ArgCaptured { ref ty, .. })) => {
             let rest = wrap_call(args, idx + 1, inner);
             let var_name = Ident::from(format!("__{}", idx));
+            let raw_type = match ty {
+                &Type::Reference(TypeReference { ref elem, .. }) => &elem,
+                ty => ty,
+            };
             quote!{
-                for #var_name in <#ty as ::minimal_fixtures::Fixture>::values() {
+                for #var_name in <#raw_type as ::minimal_fixtures::Fixture>::values() {
                     #rest
                 }
             }
@@ -29,10 +33,26 @@ fn wrap_call<'a, I: Iterator<Item = &'a FnArg>>(mut args: I, idx: usize, inner: 
 }
 
 fn do_calls(fun: &ItemFn) -> Tokens {
-    let params_raw = (0..fun.decl.inputs.len())
-        .map(|num| {
+    let params_raw = fun.decl.inputs
+        .iter()
+        .enumerate()
+        .map(|(num, arg)| {
             let name = Ident::from(format!("__{}", num));
-            quote!(#name.clone())
+            match arg {
+                &FnArg::Captured(ArgCaptured {
+                    ty: Type::Reference(TypeReference {
+                        mutability: Some(_),
+                        ..
+                    }),
+                .. }) => quote!(&mut #name.clone()),
+                &FnArg::Captured(ArgCaptured {
+                    ty: Type::Reference(TypeReference {
+                        mutability: None,
+                        ..
+                    }), ..
+                }) => quote!(&#name),
+                _ => quote!(#name.clone()),
+            }
         });
     let comma = quote!(,);
     let mut params = Tokens::new();
@@ -71,4 +91,3 @@ pub fn minimal_fixture(_metadata: TokenStream, function: TokenStream) -> TokenSt
 
     result.into()
 }
-

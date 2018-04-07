@@ -6,14 +6,22 @@ use minimal_fixtures::minimal_fixture;
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
 struct X;
 
-/*
 #[minimal_fixture]
 fn do_test(x: X) {
     assert_eq!(x, X);
 }
-*/
 
 #[minimal_fixture]
 fn do_double_test(x1: X, x2: X) {
     assert_eq!(x1, x2);
+}
+
+#[minimal_fixture]
+fn test_with_ref(x: &X) {
+    assert_eq!(x, &X);
+}
+
+#[minimal_fixture]
+fn test_with_mut_ref(x: &mut X) {
+    assert_eq!(x, &X);
 }
